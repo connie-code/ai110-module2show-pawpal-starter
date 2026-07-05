@@ -12,17 +12,19 @@ around four classes:
 - ``Pet``: a single pet, holding its details, medical history, and the care
   tasks associated with it.
 - ``Task``: a single unit of pet care, with a time, priority, duration, and
-  optional recurrence.
+  optional recurrence. Each task knows which ``Pet`` it belongs to.
 - ``Scheduler``: the engine that takes a collection of tasks along with owner
   and pet information, applies constraints (available time, priority,
   preferences), builds a plan, detects conflicts, and explains its decisions.
 
 Relationships:
-    Owner "1" --> "*" Pet    (an owner owns many pets)
-    Pet   "1" --> "*" Task   (a pet has many tasks)
+    Owner "1" --> "*" Pet     (an owner owns many pets)
+    Pet   "1" --> "*" Task     (a pet has many tasks)
+    Task  "*" --> "1" Pet      (each task is assigned to one pet)
     Scheduler ..> Task/Owner/Pet (the scheduler reads these to build a plan)
 """
 
+from datetime import time
 from typing import Dict, List
 
 
@@ -40,6 +42,10 @@ class Owner:
         self.last_name: str = last_name
         self.address: str = address
         self.pets: List["Pet"] = []
+        # Owner.preferences: the owner's PERSISTENT, personal scheduling wishes
+        # (e.g. {"no_tasks_before": "07:00", "preferred_walk_time": "morning"}).
+        # This is part of the owner's saved profile and outlives any single plan.
+        # The Scheduler reads a copy of these when it builds a plan.
         self.preferences: Dict = preferences if preferences is not None else {}
 
     def add_pet(self, pet: "Pet") -> None:
@@ -90,17 +96,25 @@ class Task:
         self,
         name: str,
         task_type: str,
-        time: str,
+        time: time,
         priority: int,
         duration: int,
         recurrence: str = None,
+        pet: "Pet" = None,
+        end_time: time = None,
     ) -> None:
         self.name: str = name
         self.task_type: str = task_type
-        self.time: str = time
+        self.time: time = time  # start time of the task (datetime.time)
         self.priority: int = priority
-        self.duration: int = duration
+        self.duration: int = duration  # length of the task in minutes
         self.recurrence: str = recurrence
+        # Back-reference to the Pet this task is assigned to, so a task always
+        # knows which pet it belongs to (mirrors Pet.tasks in the other direction).
+        self.pet: "Pet" = pet
+        # End time of the task (datetime.time). May be provided directly or
+        # computed from `time` + `duration` when the logic is implemented.
+        self.end_time: time = end_time
 
     def edit(self, updates: Dict) -> None:
         """Update one or more attributes of this task from a dict of changes."""
@@ -121,12 +135,28 @@ class Scheduler:
     ) -> None:
         self.tasks: List["Task"] = []
         self.available_minutes: int = available_minutes
+        # Scheduler.preferences: the ACTIVE preferences applied to THIS planning
+        # run. Usually loaded/copied from an Owner (see load_tasks_from_owner),
+        # but kept separately so a single planning session can be tweaked or
+        # overridden without mutating the owner's saved profile.
         self.preferences: Dict = preferences if preferences is not None else {}
         self.scheduled_tasks: List["Task"] = []
         self.skipped_tasks: List["Task"] = []
 
     def add_task(self, task: "Task") -> None:
         """Add a task to the pool of tasks to be scheduled."""
+        pass
+
+    def load_tasks_from_pet(self, pet: "Pet") -> None:
+        """Load all of a single pet's tasks into the scheduler's task pool."""
+        pass
+
+    def load_tasks_from_owner(self, owner: "Owner") -> None:
+        """Load tasks from every pet the owner has, and adopt the owner's preferences.
+
+        Walks owner -> pets -> tasks so a page can populate the scheduler from a
+        single owner. This realizes the ``Scheduler ..> Owner/Pet`` relationship.
+        """
         pass
 
     def apply_constraints(self) -> List["Task"]:
@@ -138,7 +168,7 @@ class Scheduler:
         pass
 
     def detect_conflicts(self) -> List["Task"]:
-        """Return tasks that conflict (e.g. overlapping times) within the plan."""
+        """Return tasks that conflict (e.g. overlapping time slots) within the plan."""
         pass
 
     def explain_plan(self) -> str:

@@ -9,16 +9,19 @@
   2. Users can add and edit tasks with time and the priority of the task
   3. Users can schedule appointments for doctors, walk, cleaning, etc.
 - What classes did you include, and what responsibilities did you assign to each?
-  * Owner - holds the first and last name of the owner, address, pet(s) they have
-  * Pet - holds the pet's name, medical history, owner name
+  * Owner - holds the first and last name of the owner, address, pet(s) they have, their preferences for pet care
+  * Pet - holds the pet's name, medical history, owner name, species, tasks
   * Task - the task name, type, time, priority, recurrence (f any), duration
   * Schedular - applies contraints to the tasks with the owner and pet information and creates a plan 
 
 **b. Design changes**
 
 - Did your design change during implementation?
+  * Yes
   
 - If yes, describe at least one change and why you made it.
+  * In the Task object, a relationship with Pet was added so that each tasks knows which Pet it is assigned to. Without this a task does not know which pet it belongs to, while Pet knows its tasks
+  * Changed the time attribute in Time class to have type datetime.time. This is to prevent different time format of time to cause bugs and problems.
 
 ---
 
