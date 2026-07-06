@@ -294,4 +294,137 @@ if st.button("Generate schedule"):
             weekday=weekday_arg,
             pet=pet_arg,
         )
+        # Persist the built plan so it survives Streamlit reruns (e.g. when the
+        # user expands a section below).
+        st.session_state.scheduler = scheduler
+
+
+def _fmt_time(t):
+    """Format a task start time for display, or a placeholder when it's timeless."""
+    return t.strftime("%H:%M") if t else "--:--"
+
+
+def _fmt_priority(priority):
+    """Show priority as a readable label (with the raw value) instead of a bare int."""
+    return f"{PRIORITY_TO_LABEL.get(priority, '?').title()} ({priority})"
+
+
+def _fmt_recurrence(recurrence):
+    """Show a task's recurrence in title case, or an en dash for one-off tasks."""
+    return recurrence.replace(":", ": ").title() if recurrence else "—"
+
+
+def _end_time_str(task):
+    """Return the task's end time (start + duration) as HH:MM, or a placeholder."""
+    if task.time is None:
+        return "--:--"
+    total = task.time.hour * 60 + task.time.minute + task.duration
+    return f"{(total // 60) % 24:02d}:{total % 60:02d}"
+
+
+def _slot(task):
+    """Render a task's time window as 'HH:MM–HH:MM' for warning messages."""
+    return f"{_fmt_time(task.time)}–{_end_time_str(task)}"
+
+
+scheduler = st.session_state.get("scheduler")
+if scheduler is not None:
+    used = sum(t.duration for t in scheduler.scheduled_tasks)
+    free = scheduler.available_minutes - used
+
+    st.markdown("### 📋 Daily Care Plan")
+
+    # Time-budget overview.
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Available", f"{scheduler.available_minutes} min")
+    m2.metric("Scheduled", f"{used} min", delta=f"{len(scheduler.scheduled_tasks)} task(s)")
+    m3.metric("Free", f"{free} min")
+
+    # Timing conflicts, presented by severity so a pet owner knows what to do.
+    # Same-pet clashes are physically impossible (red); different-pet clashes are
+    # just a heads-up (amber). Each message names the tasks, the times, and a fix.
+    # Check overlaps across every task the scheduler considered (scheduled +
+    # skipped), so a clash is still surfaced when auto-resolve moved one task out.
+    conflicts = scheduler.conflict_details(
+        tasks=scheduler.scheduled_tasks + scheduler.skipped_tasks
+    )
+    if not conflicts:
+        st.success("✅ No scheduling conflicts detected.")
+    else:
+        same_pet = [c for c in conflicts if c["same_pet"]]
+        diff_pet = [c for c in conflicts if not c["same_pet"]]
+
+        for c in same_pet:
+            a, b = c["earlier"], c["later"]
+            pet = c["pets"][0]
+            st.error(
+                f"🚫 **{pet} can't be in two places at once.** "
+                f"'{a.name}' ({_slot(a)}) overlaps '{b.name}' ({_slot(b)}). "
+                f"Try moving '{b.name}' to after {_end_time_str(a)}, "
+                f"shortening one, or dropping the lower-priority task."
+            )
+
+        for c in diff_pet:
+            a, b = c["earlier"], c["later"]
+            pet_a = a.pet.name if a.pet else "unassigned"
+            pet_b = b.pet.name if b.pet else "unassigned"
+            st.warning(
+                f"⚠️ **You're needed for two pets at once.** "
+                f"'{a.name}' for {pet_a} ({_slot(a)}) overlaps "
+                f"'{b.name}' for {pet_b} ({_slot(b)}). "
+                f"Fine if you have help — otherwise stagger them so you can give "
+                f"each pet your full attention."
+            )
+
+        # When auto-resolve is on, connect the warning to what the scheduler did.
+        if resolve_conflicts and scheduler.skipped_tasks:
+            st.caption(
+                "Conflict resolution is on, so the scheduler kept the "
+                "higher-priority task in each overlap and moved the other to "
+                "**Skipped** below."
+            )
+
+    # Scheduled tasks shown in chronological order. Reuse the Scheduler's
+    # sort_by_time() ordering and keep only the tasks that made the plan.
+    st.markdown(f"#### ✅ Scheduled ({len(scheduler.scheduled_tasks)})")
+    if scheduler.scheduled_tasks:
+        st.caption("Ordered chronologically by start time. ⚠️ marks an overlapping task.")
+        conflicting = {id(t) for t in scheduler.detect_conflicts()}
+        planned_ids = {id(t) for t in scheduler.scheduled_tasks}
+        ordered = [t for t in scheduler.sort_by_time() if id(t) in planned_ids]
+        st.table(
+            [
+                {
+                    "Time": _fmt_time(t.time),
+                    "Task": ("⚠️ " if id(t) in conflicting else "") + t.name,
+                    "Pet": t.pet.name if t.pet else "unassigned",
+                    "Priority": _fmt_priority(t.priority),
+                    "Duration": f"{t.duration} min",
+                    "Repeats": _fmt_recurrence(t.recurrence),
+                }
+                for t in ordered
+            ]
+        )
+    else:
+        st.info("No tasks scheduled.")
+
+    # Skipped tasks with the reason the Scheduler recorded for each.
+    if scheduler.skipped_tasks:
+        st.markdown(f"#### 🚫 Skipped ({len(scheduler.skipped_tasks)})")
+        st.caption("Tasks that didn't fit the plan, with the scheduler's reason.")
+        st.table(
+            [
+                {
+                    "Time": _fmt_time(t.time),
+                    "Task": t.name,
+                    "Pet": t.pet.name if t.pet else "unassigned",
+                    "Priority": _fmt_priority(t.priority),
+                    "Reason": scheduler.skip_reasons.get(t, "not scheduled"),
+                }
+                for t in scheduler.skipped_tasks
+            ]
+        )
+
+    # Full text explanation still available for reference.
+    with st.expander("📄 Plan explanation (text)"):
         st.text(scheduler.explain_plan())

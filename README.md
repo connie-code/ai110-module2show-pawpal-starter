@@ -97,12 +97,15 @@ Confidence Level: 5
 
 ## 📸 Demo Walkthrough
 
-Describe your app in numbered steps so a reader can follow along without watching a video:
-
-1. <!-- Describe this step -->
-2. <!-- Describe this step -->
-3. <!-- Describe this step -->
-4. <!-- Describe this step -->
-5. <!-- Add more steps as needed -->
+1. Run `streamlit run app.py` to launch the app in the browser.
+2. In the Owner section, type a name in the "Owner name" box (saves automatically).
+3. In the Pets section, type a "Pet name", pick a "Species", and click "Add pet". Repeat to add more pets.
+4. In the Tasks section, choose a pet from "Assign task to pet", fill in the title, type, start time, duration, priority, and repeat rule, then click "Add task".
+5. Expand any task row to edit its fields and click "Save changes", click "Delete task", or flip the "Include in today's plan" toggle.
+6. In the Build Schedule section, set "Available minutes for the day" and, if you like, adjust the "Highest priority first" and "Resolve time conflicts" checkboxes.
+7. Use the "Plan for day" and "Only for pet" dropdowns to filter which tasks get scheduled.
+8. Click "Generate schedule" to build the plan.
+9. In the Daily Care Plan section, review the time-budget metrics, the conflict warnings (green if clear, red/amber if tasks overlap), the chronologically sorted Scheduled table, and the Skipped table with reasons.
+10. Expand "Plan explanation (text)" to read the full written summary of the plan.
 
 **Screenshot or video** *(optional)*: <!-- Insert a screenshot or link to a demo video here -->

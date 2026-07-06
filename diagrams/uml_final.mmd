@@ -1,0 +1,71 @@
+classDiagram
+    class Owner {
+        +str first_name
+        +str last_name
+        +str address
+        +List~Pet~ pets
+        +Dict preferences
+        +add_pet(pet) void
+        +remove_pet(pet) void
+        +edit(updates) void
+        +list_pets() List~Pet~
+        +list_all_tasks() List~Task~
+    }
+
+    class Pet {
+        +str name
+        +str species
+        +Owner owner
+        +List~str~ medical_history
+        +List~Task~ tasks
+        +add_task(task) void
+        +remove_task(task) void
+        +add_medical_record(record) void
+        +edit(updates) void
+        +list_tasks() List~Task~
+    }
+
+    class Task {
+        +str name
+        +str task_type
+        +time time
+        +int priority
+        +int duration
+        +str recurrence
+        +Pet pet
+        +time end_time
+        +bool completed
+        +bool include_in_plan
+        +date due_date
+        +edit(updates) void
+        +is_recurring() bool
+        +is_due(weekday) bool
+        +next_occurrence() Task
+        +mark_complete() Task
+    }
+
+    class Scheduler {
+        +List~Task~ tasks
+        +int available_minutes
+        +Dict preferences
+        +List~Task~ scheduled_tasks
+        +List~Task~ skipped_tasks
+        +Dict~Task,str~ skip_reasons
+        +add_task(task) void
+        +load_tasks_from_pet(pet) void
+        +load_tasks_from_owner(owner) void
+        +filter_tasks(pet, completed, include_in_plan, weekday, match) List~Task~
+        +sort_by_time(descending) List~Task~
+        +apply_constraints(highest_priority_first, weekday, pet) List~Task~
+        +build_plan(highest_priority_first, resolve_conflicts, weekday, pet) List~Task~
+        +detect_conflicts() List~Task~
+        +check_time_conflicts(tasks) str
+        +conflict_details(tasks) List~Dict~
+        +explain_plan() str
+    }
+
+    Owner "1" <--> "*" Pet : owns
+    Pet "1" <--> "*" Task : has
+    Scheduler ..> Task : schedules
+    Scheduler ..> Owner : reads tasks & preferences
+    Scheduler ..> Pet : reads pet info

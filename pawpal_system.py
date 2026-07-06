@@ -547,6 +547,48 @@ class Scheduler:
         except Exception as exc:  # never let conflict-checking crash the caller
             return f"Could not check for conflicts ({exc})."
 
+    def conflict_details(self, tasks: List["Task"] = None) -> List[Dict]:
+        """Return a structured list of timing conflicts among ``tasks`` (defaults
+        to the current plan, ``scheduled_tasks``), so a UI can present each clash
+        in its own way instead of parsing the ``check_time_conflicts`` string.
+
+        Each entry describes one overlapping PAIR of tasks, earliest first::
+
+            {
+                "earlier": Task,   # the task that starts first (or higher priority
+                                   #   on a tie) — the one worth keeping put
+                "later": Task,     # the task that starts later — the natural one
+                                   #   to nudge to resolve the clash
+                "same_pet": bool,  # True if both tasks belong to the same pet
+                "pets": [str],     # distinct pet name(s) involved, sorted
+            }
+
+        A same-pet clash is physically impossible (one animal, two places at
+        once); a different-pet clash is only a heads-up. Timeless tasks never
+        conflict. Run ``build_plan()`` first, or pass ``tasks`` explicitly."""
+        if tasks is None:
+            tasks = self.scheduled_tasks
+        timed = [t for t in tasks if t.time is not None]
+        # Sort so the earlier-starting task is 'a'; ties go to higher priority.
+        timed.sort(key=lambda t: (_minutes_since_midnight(t.time), -t.priority))
+
+        details: List[Dict] = []
+        for i, a in enumerate(timed):
+            for b in timed[i + 1:]:
+                if not _tasks_overlap(a, b):
+                    continue
+                pet_a = a.pet.name if a.pet else "unassigned"
+                pet_b = b.pet.name if b.pet else "unassigned"
+                details.append(
+                    {
+                        "earlier": a,
+                        "later": b,
+                        "same_pet": pet_a == pet_b,
+                        "pets": sorted({pet_a, pet_b}),
+                    }
+                )
+        return details
+
     def explain_plan(self) -> str:
         """Return a human-readable summary of the current plan: time budget,
         scheduled tasks, skipped tasks (with reasons), and conflicts. Run
