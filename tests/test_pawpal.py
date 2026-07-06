@@ -2,7 +2,7 @@
 
 import os
 import sys
-from datetime import date, time
+from datetime import date, time, timedelta
 
 # Make the project root importable so `import pawpal_system` works when pytest
 # runs this file from inside the tests/ directory.
@@ -228,3 +228,131 @@ def test_detect_conflicts_flags_overlap():
     conflicts = scheduler.detect_conflicts()
 
     assert a in conflicts and b in conflicts
+
+
+
+def test_tasks_returned_in_chronological_order():
+    """sort_by_time() returns tasks in ascending start-time order regardless
+    of the order they were added."""
+    noon = Task("Lunch feed", "feeding", time(12, 0), priority=1, duration=15)
+    dawn = Task("Sunrise walk", "walk", time(6, 0), priority=1, duration=30)
+    dusk = Task("Sunset walk", "walk", time(19, 30), priority=1, duration=30)
+    midday = Task("Playtime", "play", time(9, 15), priority=1, duration=20)
+    scheduler = _scheduler_with([noon, dusk, dawn, midday])
+
+    ordered = scheduler.sort_by_time()
+
+    assert ordered == [dawn, midday, noon, dusk]
+    # Start times are strictly non-decreasing.
+    starts = [t.time for t in ordered]
+    assert starts == sorted(starts)
+
+
+def test_daily_complete_creates_task_for_following_day():
+    """Completing a daily task spawns a new occurrence due exactly one day
+    later than the original."""
+    pet = Pet("Biscuit", "dog")
+    feed = Task("Feed", "feeding", time(7, 0), priority=3, duration=10,
+                recurrence="daily", due_date=date(2026, 7, 6))
+    pet.add_task(feed)
+
+    upcoming = feed.mark_complete()
+
+    assert upcoming is not None
+    assert upcoming.due_date == feed.due_date + timedelta(days=1)
+    assert upcoming.due_date == date(2026, 7, 7)
+
+
+def test_scheduler_flags_duplicate_times():
+    """check_time_conflicts() flags two tasks scheduled at the same start
+    time and reports no conflict when start times are distinct."""
+    a = Task("Walk", "walk", time(8, 0), priority=5, duration=30)
+    b = Task("Give pill", "meds", time(8, 0), priority=4, duration=5)
+    scheduler = _scheduler_with([a, b])
+
+    message = scheduler.check_time_conflicts()
+    assert "WARNING" in message
+    assert "08:00" in message
+
+    # Distinct start times -> no conflict reported.
+    c = Task("Feed", "feeding", time(9, 0), priority=3, duration=10)
+    clear = _scheduler_with([a, c])
+    assert clear.check_time_conflicts() == "No scheduling conflicts detected."
+
+
+def test_time_budget_boundary_conditions():
+    """A task exactly equal to the remaining budget fits; one minute over is
+    skipped; available_minutes=0 schedules only zero-duration tasks; a
+    duration=0 task always fits."""
+    # Exactly equal: 30-minute task into a 30-minute budget fits.
+    exact = Task("Walk", "walk", time(8, 0), priority=5, duration=30)
+    scheduler = _scheduler_with([exact], available_minutes=30)
+    scheduler.build_plan()
+    assert scheduler.scheduled_tasks == [exact]
+    assert scheduler.skipped_tasks == []
+
+    # One minute over: 31-minute task into a 30-minute budget is skipped.
+    over = Task("Long walk", "walk", time(8, 0), priority=5, duration=31)
+    scheduler = _scheduler_with([over], available_minutes=30)
+    scheduler.build_plan()
+    assert scheduler.scheduled_tasks == []
+    assert over in scheduler.skipped_tasks
+    assert scheduler.skip_reasons[over] == "not enough time remaining"
+
+    # available_minutes=0: a positive-duration task cannot fit...
+    nonzero = Task("Feed", "feeding", time(8, 0), priority=5, duration=10)
+    zero = Task("Refill water", "feeding", time(9, 0), priority=4, duration=0)
+    scheduler = _scheduler_with([nonzero, zero], available_minutes=0)
+    scheduler.build_plan()
+    # ...but a duration=0 task still fits (0 <= 0).
+    assert scheduler.scheduled_tasks == [zero]
+    assert nonzero in scheduler.skipped_tasks
+
+
+def test_spawned_task_is_not_completed_has_pet_and_is_in_pet_tasks():
+    """The occurrence spawned on completion is not completed, is linked back
+    to the same pet, and is present in that pet's task list."""
+    pet = Pet("Mochi", "cat")
+    walk = Task("Walk", "walk", time(8, 0), priority=5, duration=30,
+                recurrence="daily")
+    pet.add_task(walk)
+
+    new_walk = walk.mark_complete()
+
+    assert new_walk.completed is False
+    assert new_walk.pet is pet
+    assert new_walk in pet.tasks
+
+
+def test_overlap_keeps_higher_priority_and_names_winner():
+    """With conflict resolution on, of two overlapping tasks the
+    higher-priority one is scheduled and the lower is skipped with a reason that
+    names the winning task."""
+    high = Task("Walk", "walk", time(8, 0), priority=9, duration=60)   # 08:00-09:00
+    low = Task("Feed", "feeding", time(8, 30), priority=2, duration=30)  # overlaps
+    scheduler = _scheduler_with([high, low])
+
+    scheduler.build_plan(resolve_conflicts=True)
+
+    assert high in scheduler.scheduled_tasks
+    assert low in scheduler.skipped_tasks
+    assert "'Walk'" in scheduler.skip_reasons[low]
+
+
+def test_overlapping_pair_kept_when_unresolved_but_skipped_when_resolved():
+    """The same overlapping pair stays scheduled with resolve_conflicts=False
+    but the lower-priority task is skipped with resolve_conflicts=True."""
+    high = Task("Walk", "walk", time(8, 0), priority=9, duration=60)
+    low = Task("Feed", "feeding", time(8, 30), priority=2, duration=30)
+
+    # Unresolved: both remain in the plan.
+    unresolved = _scheduler_with([high, low])
+    unresolved.build_plan(resolve_conflicts=False)
+    assert high in unresolved.scheduled_tasks
+    assert low in unresolved.scheduled_tasks
+
+    # Resolved: the lower-priority task is dropped from the plan.
+    resolved = _scheduler_with([high, low])
+    resolved.build_plan(resolve_conflicts=True)
+    assert high in resolved.scheduled_tasks
+    assert low in resolved.skipped_tasks

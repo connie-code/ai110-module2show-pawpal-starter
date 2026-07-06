@@ -64,17 +64,24 @@ Scheduled (4):
 
 ```bash
 # Run the full test suite:
-pytest
+python -m pytest
 
 # Run with coverage:
 pytest --cov
 ```
+Description of Tests: The tests covered the Owner, Pet, Task, and Scheduler classes. It checks that tasks can be created, added to pets, and marked complete; that recurring tasks spawn a correct next occurrence (daily +1 day, weekly +7 days) while one-off tasks don't; that tasks sort chronologically and filter by pet and status; and that the scheduler respects its time budget, handles boundary cases (exact fit, one minute over, zero minutes), and detects time conflicts—keeping the higher-priority task when two overlap.
 
 Sample test output:
 
 ```
-# Paste your pytest output here
+collected 20 items                                                                                                                                              
+
+tests/test_pawpal.py ....................                                                                                                                 [100%]
+
+====================================================================== 20 passed in 0.07s =======================================================================
 ```
+
+Confidence Level: 5
 
 ## 📐 Smarter Scheduling
 
