@@ -30,12 +30,16 @@
 **a. Constraints and priorities**
 
 - What constraints does your scheduler consider (for example: time, priority, preferences)?
+  * The schedular considers time, priority and preferences
 - How did you decide which constraints mattered most?
+  * I thought of the human aspect and how a typical user would like to engage with the application.
 
 **b. Tradeoffs**
 
 - Describe one tradeoff your scheduler makes.
+  * A tradeoff the scheduler makes is when there's a conflicting task and it's of similiar priority and time. Decided to schedule it in and have a warning message letting the user decides. 
 - Why is that tradeoff reasonable for this scenario?
+  * There's times where the user would like to add everything that is going on into the schedule and multiple people are executing the tasks so it technically does not overlap in real life.
 
 ---
 
